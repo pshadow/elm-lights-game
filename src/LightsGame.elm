@@ -1,0 +1,168 @@
+module LightsGame
+    exposing
+        ( Model
+        , init
+        , initWithDefaultBoard
+        , isSolved
+        , Msg(..)
+        , update
+        , view
+        )
+
+import Html
+import Html.Attributes
+import Html.Events
+import Array
+import Matrix exposing (Matrix)
+
+
+-- Model
+
+
+type alias Model =
+    { color : String
+    , isOn : Matrix (Maybe Bool)
+    }
+
+
+init : Matrix (Maybe Bool) -> Model
+init startingBoard =
+    { color = "orange"
+    , isOn = startingBoard
+    }
+
+
+initWithDefaultBoard : String -> Model
+initWithDefaultBoard color =
+    { color = color
+    , isOn =
+        Matrix.repeat 6 6 (Just False)
+            |> Matrix.set 4 3 Nothing
+            |> Matrix.set 2 2 Nothing
+    }
+        |> update (Toggle { x = 0, y = 0 })
+        |> update (Toggle { x = 2, y = 0 })
+        |> update (Toggle { x = 1, y = 4 })
+        |> update (Toggle { x = 4, y = 2 })
+        |> update (Toggle { x = 5, y = 0 })
+        |> update (Toggle { x = 0, y = 2 })
+        |> update (Toggle { x = 1, y = 1 })
+
+
+isSolved : Model -> Bool
+isSolved model =
+    let
+        isOn maybeIsOn =
+            maybeIsOn
+                |> Maybe.withDefault False
+
+        onLights =
+            Matrix.filter isOn model.isOn
+    in
+        Array.isEmpty onLights
+
+
+
+-- Update
+
+
+type alias LightIndex =
+    { x : Int, y : Int }
+
+
+type Msg
+    = Toggle LightIndex
+
+
+update : Msg -> Model -> Model
+update msg model =
+    case msg of
+        Toggle indexToToggle ->
+            { model | isOn = toggleLight indexToToggle model.isOn }
+
+
+toggleLight : LightIndex -> Matrix (Maybe Bool) -> Matrix (Maybe Bool)
+toggleLight indexToToggle matrix =
+    let
+        toggleMaybeBool maybeBool =
+            Maybe.map not maybeBool
+    in
+        matrix
+            |> Matrix.update indexToToggle.x indexToToggle.y toggleMaybeBool
+            |> Matrix.update (indexToToggle.x + 1) indexToToggle.y toggleMaybeBool
+            |> Matrix.update (indexToToggle.x - 1) indexToToggle.y toggleMaybeBool
+            |> Matrix.update indexToToggle.x (indexToToggle.y + 1) toggleMaybeBool
+            |> Matrix.update indexToToggle.x (indexToToggle.y - 1) toggleMaybeBool
+
+
+
+-- View
+
+
+view : Model -> Html.Html Msg
+view model =
+    Html.div []
+        [ if isSolved model then
+            Html.text "You're the winner!"
+          else
+            gameView model
+        ]
+
+
+gameView : Model -> Html.Html Msg
+gameView model =
+    model.isOn
+        |> Matrix.indexedMap (lightButton model.color)
+        |> matrixToDivs
+
+
+matrixToDivs : Matrix (Html.Html Msg) -> Html.Html Msg
+matrixToDivs matrix =
+    let
+        makeRow y =
+            Matrix.getRow y matrix
+                |> Maybe.map Array.toList
+                |> Maybe.withDefault []
+                |> Html.div []
+
+        height =
+            Matrix.height matrix
+    in
+        [0..height]
+            |> List.map makeRow
+            |> Html.div []
+
+
+lightButton : String -> Int -> Int -> Maybe Bool -> Html.Html Msg
+lightButton color x y maybeIsOn =
+    case maybeIsOn of
+        Nothing ->
+            Html.div
+                [ Html.Attributes.style
+                    [ ( "width", "40px" )
+                    , ( "height", "40px" )
+                    , ( "border-radius", "4px" )
+                    , ( "margin", "2px" )
+                    , ( "display", "inline-block" )
+                    ]
+                ]
+                []
+
+        Just isOn ->
+            Html.div
+                [ Html.Attributes.style
+                    [ ( "background-color"
+                      , if isOn then
+                            color
+                        else
+                            "gray"
+                      )
+                    , ( "width", "40px" )
+                    , ( "height", "40px" )
+                    , ( "border-radius", "4px" )
+                    , ( "margin", "2px" )
+                    , ( "display", "inline-block" )
+                    ]
+                , Html.Events.onClick (Toggle { x = x, y = y })
+                ]
+                []
